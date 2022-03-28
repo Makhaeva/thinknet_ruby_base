@@ -12,9 +12,11 @@ MENU = [{type: :create, title: "new station", action: :create_new_station},
         {type: :manage, title: "train: assign a route", action: :set_route_to_train},
         {type: :manage, title: "train: add / remove carriages", action: :manage_carriges},
         {type: :act, title: "move train (ahead or back)", action: :move_train},
-        {type: :show, title: "all stations", action: :show_stations}, 
+        {type: :show, title: "all route's stations", action: :show_route_detail},
+        #{type: :show, title: "all stations", action: :show_stations}, 
         #{type: :show, title: "all routes", action: :show_routes},
-        {type: :show, title: "trains (all and at the station)", action: :show_existing_trains}]
+        #{type: :show, title: "trains (all and at the station)", action: :show_existing_trains},
+        {type: :show, title: "trains in the station", action: :show_station_trains}]
 
   def uniq? (class_name, new_id, id_title)
     all_instances_id = []
@@ -22,12 +24,15 @@ MENU = [{type: :create, title: "new station", action: :create_new_station},
     all_instances_id.none?{|i| i == new_id}
   end
   
+  def simple_create_station(station_name)
+    Station.new(station_name)
+  end
 
   def create_new_station
     print "Enter the name of new station: "
     station_name = gets.chomp
     if uniq?(Station, station_name, "name")
-      Station.new(station_name)
+      simple_create_station(station_name)
     else
       puts "The station with name #{station_name} already exists."
     end
@@ -35,67 +40,91 @@ MENU = [{type: :create, title: "new station", action: :create_new_station},
  
 
   def create_new_train
-    print "Enter the name of new train: "
-    train_number = gets.chomp.to_sym
+    loop do
+      print "Enter the number of new train: "
+      train_number = gets.chomp.to_sym
     
-    if uniq?(Train, train_number, "number")
-      puts "Choose:"
-      puts "1 - to create passenger train" 
-      puts "2 - to create cargo train"
-      user_choice = gets.chomp.to_i
+      if uniq?(Train, train_number, "number")
+        puts "Choose:"
+        puts "1 - to create passenger train" 
+        puts "2 - to create cargo train"
+        user_choice = gets.chomp.to_i
 
-      case user_choice
-      when 1
-        PassengerTrain.new(train_number)
-      when 2
-        CargoTrain.new(train_number)
+        case user_choice
+        when 1
+          return PassengerTrain.new(train_number)
+        when 2
+          return CargoTrain.new(train_number)
+        else
+          puts "Undefined train type. Train was not created!"
+        end
       else
-        puts "Undefined train type. Train was not created!"
-      end
-
-    else
-      puts "The train with number #{train_number.to_s} already exists."
-    end 
+        puts "The train with number #{train_number.to_s} already exists."
+      end 
+    end
   end
 
 
   def create_new_route
     puts "There are following stations:"
     show_stations
+    stations_list_length = Station.all.length
     
-    print "Choose number to the first station of route: "
-    first_station = gets.chomp.to_i
+    puts "Choose number from list above  or  enter new stations name"
+    print "first station: " 
+    first_station = gets.chomp
     print "last station: "
-    last_station = gets.chomp.to_i
+    last_station = gets.chomp
 
-    new_route = Route.new(Station.all[first_station - 1], Station.all[last_station - 1]) #if (first_station > 1 && last_station <= Station.all.length)
+    first_station_exists = (first_station.to_i > 0  &&  first_station.to_i <= stations_list_length)
+    last_station_exists = (last_station.to_i > 0  &&  last_station.to_i <= stations_list_length)
+    
+    f_st = first_station_exists ? Station.all[first_station.to_i - 1] : simple_create_station(first_station) 
+    l_st = last_station_exists ? Station.all[last_station.to_i - 1] : simple_create_station(last_station)
+
+    new_route = Route.new(f_st, l_st)
   end
+
+  def show_route_detail
+    route = selected_current_route
+    puts "The route #{route.first_station.name} - #{route.last_station.name}"
+    puts "has following stations:"
+    show_route_stations(route)
+  end
+
+  def show_route_stations(route)
+    route.stations.each_with_index {|st, i| puts "#{i + 1}. #{st.name}"}
+  end
+
 
 
   def edit_route
     route = selected_current_route
 
-    puts "The route #{route.first_station.name} - #{route.last_station.name}"
-    puts "has following stations:"
-    route.stations.each_with_index {|st, i| puts "#{i + 1}. #{st.name}"}
-    
-    puts "Enter 1 - to add station"
-    puts "      2 - to delete station from the route."
-    action_name = (gets.chomp.to_i == 2 ? :delete_station : :add_station)
-    
-    if action_name == :delete_station
-      puts "Choose the number of station from list above: "
-      station = route.stations[gets.chomp.to_i - 1]
+    puts "Enter 1 - add station to route"
+    puts "      2 - delete station from the route"
+    puts "      3 - delete route"
+    puts "      any other key - for exit"
 
-      print "Do you want to delete #{station.name} from route? (y/n) "
-      return nil if gets.chomp.include?('n')
-    else
+    user_choice = gets.chomp.to_i
+    case user_choice
+    when 0
+      return 
+    when 1
       station = selected_current_station
-      
-      print "Do you want to add #{station.name} to route? (y/n) "
-      return nil if gets.chomp.include?('n')
+      route.add_station(station)
+    when 2
+      puts "Choose station number from the list below: "
+      show_route_stations(route)
+
+      station_number = gets.chomp
+      if station_number.to_i > 1  &&  station_number.to_i < route.stations.length    #enter the number and it isn't first or last station of route
+        station = route.stations[station_number.to_i - 1] 
+        route.delete_station(station)
+      end
+    when 3
+      Route.delete(route)
     end
-    route.send(action_name, station)
   end
 
 
@@ -122,14 +151,15 @@ MENU = [{type: :create, title: "new station", action: :create_new_station},
     
     case user_choice
     when 1
-      cur_train.type == "cargo" ? (carriage = CargoCarriage.new) : (carriage = PassangerCarriage.new)
+      carriage =  cur_train.type == "cargo" ? CargoCarriage.new :  PassangerCarriage.new
       cur_train.attach_carriage(carriage)
     when 2
-      count_of_carriages = cur_train.carriages.length
-      puts "Train #{cur_train.number.to_s} has #{count_of_carriages} carriages."
+      puts "Train #{cur_train.number.to_s} has #{cur_train.carriages.length} carriages."
       print "Enter the number of carriage which you'd like to unhook: "
-      unhook_carriage_number = gets.chomp.to_i
-      cur_train.unhook_carriage(cur_train.carriages[unhook_carriage_number - 1]) if unhook_carriage_number <= count_of_carriages
+      unhook_carriage_number = gets.chomp
+      unhook_exists = unhook_carriage_number.to_i > 0  && unhook_carriage_number.to_i <= cur_train.carriages.length
+      
+      cur_train.unhook_carriage(cur_train.carriages[unhook_carriage_number.to_i - 1]) if unhook_exists
     end
   end
 
@@ -170,6 +200,15 @@ MENU = [{type: :create, title: "new station", action: :create_new_station},
     Train.all.each {|t| puts "#{t.number.to_s} - #{t.type}"}
   end
 
+  def show_station_trains
+    station = selected_current_station
+    
+    puts "Enter trains type ('cargo', 'passenger')  or  press any key to show all trains"
+    type = gets.chomp.to_sym 
+    type == :cargo || type == :passenger ? station.trains(type.to_s): station.trains
+  end
+
+
   def show_existing_trains
     puts "Enter 1 - to show all existing trains"
     puts "      2 - to show trains in the station"
@@ -180,22 +219,21 @@ MENU = [{type: :create, title: "new station", action: :create_new_station},
       puts "There are following stations:"
       show_trains
     when 2
-      station = selected_current_station
-      puts "Enter trains type ('cargo', 'passenger')"
-      puts "if you'd like to show same trains."  
-      type = gets.chomp.to_sym 
-
-      type == :cargo || type == :passenger ? station.trains(type.to_s): station.trains
+      show_station_trains
     end
   end
+
 
   def selected_current_station
     puts "There are following stations:"
     show_stations
-
-    print "Choose the station's number: "
-    station_number = gets.chomp.to_i
-    cur_station = Station.all[station_number - 1] if station_number <= Station.all.length && station_number > 0
+    stations_list_length = Station.all.length
+    
+    print "Choose number from list above  or  enter new stations name: "
+    station_number = gets.chomp
+    station_exists = station_number.to_i > 0  &&  station_number.to_i <= stations_list_length
+    
+    cur_station = station_exists ? Station.all[station_number.to_i - 1] : simple_create_station(station_number)
   end
 
 
@@ -203,19 +241,21 @@ MENU = [{type: :create, title: "new station", action: :create_new_station},
     puts "There are following trains:"
     show_trains
  
-    print  "Choose the train's number from list above: "
-    train_number = gets.chomp.to_sym
-    cur_train = (Train.all.select {|t| t.number == train_number}).first
+    print  "Choose the number from list above   or   press any key to create new: "
+    train_number = gets.chomp
+
+    cur_train = (Train.all.select {|t| t.number == train_number.to_sym}).first || create_new_train
   end
 
 
   def selected_current_route
     puts "There are following routes:"
     show_routes
+    print "Choose the number of route    or    press any key to create new: "
+    route_number = gets.chomp
+    route_exists = route_number.to_i > 0  &&  route_number.to_i <= Route.all.length
 
-    print "Choose the number of route: "
-    route_number = gets.chomp.to_i 
-    cur_route = Route.all[route_number - 1] if route_number <= Route.all.length && route_number > 0
+    cur_route = route_exists ? Route.all[route_number.to_i - 1] : create_new_route
   end
 
 

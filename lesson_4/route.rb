@@ -9,6 +9,10 @@ class Route
     @@all_route_instanses.clear
   end
 
+  def self.delete(route)
+    @@all_route_instanses.delete(route)
+  end
+
   def initialize(first_station, last_station)
     @first_station = first_station
     @last_station = last_station
