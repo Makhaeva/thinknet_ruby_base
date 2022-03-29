@@ -2,18 +2,9 @@ class Station
   attr_reader :name
   attr_writer :trains
 
-  def self.all
-    @@all_station_instanses ||= []
-  end
-
-  def self.clear
-    @@all_station_instanses.clear
-  end
-
   def initialize(name)
     @name = name
     @trains = []
-    self.class.all << self
   end
 
   def trains(type = "all")
